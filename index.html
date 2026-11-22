@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Teacher Stockfish</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #161512;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        h1 {
+            font-size: 20px;
+            color: #81b64c;
+            margin: 5px 0 10px 0;
+            text-align: center;
+        }
+        .mode-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            max-width: 420px;
+            width: 100%;
+        }
+        .mode-btn {
+            background-color: #262421;
+            color: #bababa;
+            border: 1px solid #3c3934;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            flex: 1;
+        }
+        .mode-btn.active {
+            background-color: #81b64c;
+            color: #161512;
+            font-weight: bold;
+            border-color: #81b64c;
+        }
+        .board-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 420px;
+            aspect-ratio: 1 / 1;
+            touch-action: pan-y;
+        }
+        #myBoard {
+            width: 100%;
+        }
+        #arrowCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .highlight-sq {
+            box-shadow: inset 0 0 3px 3px #f6f669 !important;
+        }
+        .coach-box {
+            background-color: #262421;
+            border-left: 5px solid #81b64c;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            width: 100%;
+            max-width: 420px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        .opening-name {
+            font-size: 13px;
+            color: #e5a93b;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        .eval-bar {
+            font-size: 14px;
+            color: #bababa;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .eval-score {
+            font-weight: bold;
+            color: #ffffff;
+            background: #3c3934;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .coach-advice {
+            font-size: 15px;
+            line-height: 1.45;
+            color: #f0f0f0;
+        }
+        .best-move-tag {
+            color: #81b64c;
+            font-weight: bold;
+            font-size: 17px;
+        }
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 420px;
+            width: 100%;
+        }
+        button.ctrl-btn {
+            background-color: #363431;
+            color: white;
+            border: none;
+            padding: 11px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            flex: 1;
+            min-width: 85px;
+        }
+        button.ctrl-btn:hover {
+            background-color: #4a4743;
+        }
+        button.primary {
+            background-color: #81b64c;
+            color: #161512;
+        }
+        .api-panel {
+            background-color: #262421;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 15px;
+            width: 100%;
+            max-width: 420px;
+            box-sizing: border-box;
+            font-size: 13px;
+            color: #bababa;
+        }
+        .api-panel summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #e5a93b;
+        }
+        .api-panel input, .api-panel select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            border-radius: 4px;
+            border: 1px solid #3c3934;
+            background: #161512;
+            color: #fff;
+            box-sizing: border-box;
+        }
+        .api-panel button {
+            margin-top: 8px;
+            background: #81b64c;
+            color: #161512;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>♟️ Chess Teacher Stockfish</h1>
+
+    <div class="mode-bar">
+        <button id="btnTapMode" class="mode-btn active" onclick="setMode('tap')">👆 Toucher (Défilement libre)</button>
+        <button id="btnDragMode" class="mode-btn" onclick="setMode('drag')">✊ Glisser les pièces</button>
+        <button id="btnSound" class="mode-btn active" style="flex:0.45;" onclick="toggleSound()">🔊 Son</button>
+    </div>
+
+    <div class="board-wrapper" id="boardWrapper">
+        <div id="myBoard"></div>
+        <canvas id="arrowCanvas"></canvas>
+    </div>
+
+    <div class="coach-box">
+        <div class="opening-name" id="openingName">📖 Position initiale</div>
+        <div class="eval-bar">
+            <span>Trait aux : <strong id="turnText">Blancs</strong></span>
+            <span>Avantage : <span class="eval-score" id="evalScore">+0.2</span></span>
+        </div>
+        <div class="coach-advice" id="coachText">
+            Initialisation de Stockfish...
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="ctrl-btn primary" onclick="jouerMeilleurCoup()">▶ Jouer conseil</button>
+        <button class="ctrl-btn" onclick="annulerCoup()">↩ Annuler</button>
+        <button class="ctrl-btn" onclick="retournerPlateau()">🔄 Retourner</button>
+        <button class="ctrl-btn" onclick="reinitialiser()">🆕 Nouvelle</button>
+    </div>
+
+    <details class="api-panel">
+        <summary>🤖 Optionnel : Connecter une clé API IA (Explications détaillées)</summary>
+        <p style="margin:6px 0 0 0; font-size:12px;">Colle une clé API Groq (gratuite) ou OpenAI pour qu'une IA commente chaque coup de Stockfish.</p>
+        <select id="apiProvider">
+            <option value="groq">Groq (Llama 3.3 70B - Rapide & Gratuit)</option>
+            <option value="openai">OpenAI (GPT-4o-mini)</option>
+        </select>
+        <input type="password" id="apiKeyInput" placeholder="Colle ta clé API ici (gsk_... ou sk-...)">
+        <button onclick="saveApiKey()">Enregistrer la clé API</button>
+    </details>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        var board = null;
+        var game = new Chess();
+        var stockfish = null;
+        var bestMoveCurrent = null;
+        var boardOrientation = 'white';
+        var inputMode = 'tap';
+        var selectedSquare = null;
+        var soundEnabled = true;
+        var audioCtx = null;
+        var isEngineReady = false;
+        var currentAnalysisFen = "";
+
+        // Mémoire déterministe pour toujours redonner exactement le même coup sur une position donnée
+        var moveCache = JSON.parse(localStorage.getItem("tgiame_chess_cache_v3") || "{}");
+
+        // Livre d'ouvertures intégré (instantané et 100% fiable dès les premiers coups)
+        const openingBookMoves = {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": { move: "e2e4", eval: "+0.3", reason: "Contrôle immédiatement le centre et libère la Dame et le Fou roi." },
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": { move: "c7c5", eval: "+0.2", reason: "Défense Sicilienne : lutte asymétriquement pour le contrôle de la case centrale d4." },
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": { move: "g1f3", eval: "+0.3", reason: "Développe le Cavalier vers le centre et attaque immédiatement le pion e5." },
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": { move: "b8c6", eval: "+0.3", reason: "Défend naturellement le pion e5 tout en développant une pièce vers le centre." },
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -": { move: "f1b5", eval: "+0.3", reason: "Partie Espagnole : met la pression sur le défenseur du pion e5 et prépare le petit roque." },
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": { move: "g1f3", eval: "+0.3", reason: "Prépare la poussée d4 pour ouvrir le centre face à la Défense Sicilienne." },
+            "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": { move: "g8f6", eval: "+0.2", reason: "Empêche les Blancs de jouer immédiatement e4 et garde toutes les options ouvertes." }
+        };
+
+        const ouverturesNoms = {
+            "e4": "Ouverture du Pion Roi (1. e4)",
+            "e4 e5": "Partie Ouverte (1. e4 e5)",
+            "e4 e5 Nf3": "Début du Cavalier Roi",
+            "e4 e5 Nf3 Nc6 Bb5": "Partie Espagnole (Ruy Lopez)",
+            "e4 e5 Nf3 Nc6 Bc4": "Partie Italienne",
+            "e4 c5": "Défense Sicilienne",
+            "e4 e6": "Défense Française",
+            "e4 c6": "Défense Caro-Kann",
+            "d4": "Ouverture du Pion Dame (1. d4)",
+            "d4 d5 c4": "Gambit Dame",
+            "d4 Nf6 c4 g6": "Défense Est-Indienne",
+            "c4": "Ouverture Anglaise"
+        };
+
+        // ==========================================
+        // SYNTHÉTISEUR DE BRUITAGES (WEB AUDIO API)
+        // ==========================================
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playChessSound(type) {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+
+                if (type === 'move' || type === 'castle') {
+                    // Bruit sec et mat d'une pièce en bois posée sur l'échiquier
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(160, now);
+                    osc.frequency.exponentialRampToValueAtTime(45, now + 0.08);
+                    gain.gain.setValueAtTime(0.45, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.09);
+
+                    if (type === 'castle') {
+                        // Deuxième impact léger pour la Tour lors du roque
+                        const osc2 = audioCtx.createOscillator();
+                        const gain2 = audioCtx.createGain();
+                        osc2.type = 'triangle';
+                        osc2.frequency.setValueAtTime(190, now + 0.11);
+                        osc2.frequency.exponentialRampToValueAtTime(50, now + 0.19);
+                        gain2.gain.setValueAtTime(0.35, now + 0.11);
+                        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.19);
+                        osc2.connect(gain2);
+                        gain2.connect(audioCtx.destination);
+                        osc2.start(now + 0.11);
+                        osc2.stop(now + 0.19);
+                    }
+                } else if (type === 'capture') {
+                    // Claquement plus sec et percutant pour une prise
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(240, now);
+                    osc.frequency.exponentialRampToValueAtTime(35, now + 0.12);
+                    gain.gain.setValueAtTime(0.5, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } else if (type === 'check') {
+                    // Double tonalité d'alerte pour un échec au Roi
+                    [520, 680].forEach((freq, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+                        gain.gain.setValueAtTime(0.25, now + idx * 0.1);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.1 + 0.12);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + idx * 0.1);
+                        osc.stop(now + idx * 0.1 + 0.12);
+                    });
+                } else if (type === 'gameover') {
+                    // Accord de fin de partie
+                    [440, 554, 659].forEach((freq, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                        gain.gain.setValueAtTime(0.25, now + idx * 0.12);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.12 + 0.35);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + idx * 0.12);
+                        osc.stop(now + idx * 0.12 + 0.35);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function triggerSoundForMove(moveObj) {
+            if (game.game_over()) {
+                playChessSound('gameover');
+            } else if (game.in_check()) {
+                playChessSound('check');
+            } else if (moveObj && (moveObj.flags.includes('k') || moveObj.flags.includes('q'))) {
+                playChessSound('castle');
+            } else if (moveObj && moveObj.captured) {
+                playChessSound('capture');
+            } else {
+                playChessSound('move');
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById("btnSound");
+            btn.innerText = soundEnabled ? "🔊 Son" : "🔇 Muet";
+            btn.classList.toggle("active", soundEnabled);
+            if (soundEnabled) playChessSound('move');
+        }
+
+        // ==========================================
+        // INITIALISATION ROBUSTE DE STOCKFISH
+        // ==========================================
+        function getShortFen(fullFen) {
+            return fullFen.split(" ").slice(0, 4).join(" ");
+        }
+
+        async function initStockfish() {
+            const urls = [
+                'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js',
+                'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js'
+            ];
+
+            for (let url of urls) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) continue;
+                    const scriptText = await response.text();
+                    const blob = new Blob([scriptText], { type: 'application/javascript' });
+                    stockfish = new Worker(URL.createObjectURL(blob));
+
+                    stockfish.onmessage = function(event) {
+                        const line = String(event.data || "");
+
+                        if (line === "uciok") {
+                            stockfish.postMessage("setoption name MultiPV value 1");
+                            stockfish.postMessage("setoption name Threads value 1");
+                            stockfish.postMessage("isready");
+                        }
+
+                        if (line === "readyok") {
+                            isEngineReady = true;
+                            analyserPosition();
+                        }
+
+                        if (line.includes("score cp")) {
+                            const match = line.match(/score cp (-?\d+)/);
+                            if (match) {
+                                let score = parseInt(match[1], 10) / 100;
+                                if (game.turn() === 'b') score = -score;
+                                const prefix = score > 0 ? "+" : "";
+                                window._lastEval = prefix + score.toFixed(1);
+                                document.getElementById("evalScore").innerText = window._lastEval;
+                            }
+                        } else if (line.includes("score mate")) {
+                            const match = line.match(/score mate (-?\d+)/);
+                            if (match) {
+                                window._lastEval = "Mat en " + Math.abs(parseInt(match[1], 10));
+                                document.getElementById("evalScore").innerText = window._lastEval;
+                            }
+                        }
+
+                        if (line.startsWith("bestmove")) {
+                            const parts = line.split(" ");
+                            const moveStr = parts[1];
+                            if (moveStr && moveStr !== "(none)") {
+                                const shortFen = getShortFen(game.fen());
+                                moveCache[shortFen] = {
+                                    move: moveStr,
+                                    eval: window._lastEval || "+0.0"
+                                };
+                                localStorage.setItem("tgiame_chess_cache_v3", JSON.stringify(moveCache));
+                                appliquerMeilleurCoupUI(moveStr, window._lastEval || "+0.0", null);
+                            }
+                        }
+                    };
+
+                    stockfish.postMessage("uci");
+                    return;
+                } catch (err) {}
+            }
+
+            // Si aucun CDN ne répond, le livre d'ouvertures prend le relais sans bloquer
+            analyserPosition();
+        }
+
+        function analyserPosition() {
+            effacerFleches();
+            bestMoveCurrent = null;
+            updateOpeningTitle();
+
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    document.getElementById("coachText").innerHTML = "🏆 <strong>Échec et mat !</strong> Partie terminée.";
+                } else {
+                    document.getElementById("coachText").innerHTML = "🤝 <strong>Partie nulle !</strong>";
+                }
+                return;
+            }
+
+            document.getElementById("turnText").innerText = game.turn() === 'w' ? "Blancs" : "Noirs";
+            const shortFen = getShortFen(game.fen());
+
+            // 1. Vérifier d'abord le livre d'ouvertures officiel
+            if (openingBookMoves[shortFen]) {
+                const entry = openingBookMoves[shortFen];
+                document.getElementById("evalScore").innerText = entry.eval;
+                appliquerMeilleurCoupUI(entry.move, entry.eval, entry.reason);
+                return;
+            }
+
+            // 2. Vérifier ensuite le cache déterministe (garantit 100% le même coup à chaque partie)
+            if (moveCache[shortFen]) {
+                const cached = moveCache[shortFen];
+                document.getElementById("evalScore").innerText = cached.eval;
+                appliquerMeilleurCoupUI(cached.move, cached.eval, null);
+                return;
+            }
+
+            // 3. Lancer le calcul Stockfish
+            if (stockfish && isEngineReady) {
+                document.getElementById("coachText").innerText = "⏳ Stockfish calcule le meilleur coup unique...";
+                stockfish.postMessage("stop");
+                stockfish.postMessage("ucinewgame");
+                stockfish.postMessage("position fen " + game.fen());
+                stockfish.postMessage("go depth 13");
+            } else {
+                document.getElementById("coachText").innerText = "⏳ Chargement du moteur Stockfish en cours...";
+            }
+        }
+
+        function appliquerMeilleurCoupUI(uciMove, evalStr, customReason) {
+            bestMoveCurrent = uciMove;
+            const from = uciMove.substring(0, 2);
+            const to = uciMove.substring(2, 4);
+
+            dessinerFleche(from, to);
+
+            const piece = game.get(from);
+            const nomsPieces = { p: "Pion", n: "Cavalier", b: "Fou", r: "Tour", q: "Dame", k: "Roi" };
+            const nomPiece = piece ? nomsPieces[piece.type] : "Pièce";
+
+            let explication = customReason || genererExplicationStrategique(from, to, piece);
+
+            document.getElementById("coachText").innerHTML =
+                `Meilleur coup : <span class="best-move-tag">${nomPiece} ${from} ➔ ${to}</span><br>` +
+                `<span id="aiExplanation" style="font-size:13px; color:#d0d0d0;">💡 ${explication}</span>`;
+
+            demanderExplicationIA(uciMove, nomPiece, evalStr);
+        }
+
+        function genererExplicationStrategique(from, to, piece) {
+            if (!piece) return "Coup optimal calculé par Stockfish pour prendre l'avantage.";
+            const targetPiece = game.get(to);
+            if (targetPiece) {
+                return "Capture avantageuse qui affaiblit la structure adverse et gagne du matériel ou de l'activité.";
+            }
+            if (piece.type === "k" && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2) {
+                return "Le roque met ton Roi en sécurité tout en connectant tes Tours vers le centre.";
+            }
+            if (to === "e4" || to === "d4" || to === "e5" || to === "d5") {
+                return "Prend le contrôle direct des cases centrales pour dominer l'espace.";
+            }
+            if (piece.type === "n" || piece.type === "b") {
+                return "Développe une pièce mineure vers une case active afin de préparer le roque.";
+            }
+            return "Améliore la coordination de tes pièces et prépare la suite du plan stratégique.";
+        }
+
+        function updateOpeningTitle() {
+            const hist = game.history().join(" ");
+            let found = "Position personnalisée / Milieu de jeu";
+            if (game.history().length === 0) found = "Position initiale";
+            for (let key in ouverturesNoms) {
+                if (hist.startsWith(key)) {
+                    found = ouverturesNoms[key];
+                }
+            }
+            document.getElementById("openingName").innerText = "📖 " + found;
+        }
+
+        // ==========================================
+        // GESTION TACTILE (SCROLL MOBILE) & GLISSER
+        // ==========================================
+        function setMode(mode) {
+            inputMode = mode;
+            selectedSquare = null;
+            clearHighlights();
+            document.getElementById("btnTapMode").classList.toggle("active", mode === 'tap');
+            document.getElementById("btnDragMode").classList.toggle("active", mode === 'drag');
+            document.getElementById("boardWrapper").style.touchAction = (mode === 'tap') ? 'pan-y' : 'none';
+            buildBoard();
+        }
+
+        function clearHighlights() {
+            $('#myBoard .square-55d63').removeClass('highlight-sq');
+        }
+
+        function handleSquareClick(square) {
+            if (inputMode !== 'tap' || game.game_over()) return;
+            initAudio();
+
+            if (selectedSquare === null) {
+                const piece = game.get(square);
+                if (piece && piece.color === game.turn()) {
+                    selectedSquare = square;
+                    clearHighlights();
+                    $('#myBoard .square-' + square).addClass('highlight-sq');
+                }
+            } else {
+                if (selectedSquare === square) {
+                    selectedSquare = null;
+                    clearHighlights();
+                    return;
+                }
+                const move = game.move({
+                    from: selectedSquare,
+                    to: square,
+                    promotion: 'q'
+                });
+                selectedSquare = null;
+                clearHighlights();
+
+                if (move !== null) {
+                    board.position(game.fen());
+                    triggerSoundForMove(move);
+                    analyserPosition();
+                } else {
+                    const piece = game.get(square);
+                    if (piece && piece.color === game.turn()) {
+                        selectedSquare = square;
+                        $('#myBoard .square-' + square).addClass('highlight-sq');
+                    }
+                }
+            }
+        }
+
+        function onDragStart(source, piece) {
+            if (inputMode !== 'drag' || game.game_over()) return false;
+            initAudio();
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+        }
+
+        function onDrop(source, target) {
+            var move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
+            if (move === null) return 'snapback';
+            triggerSoundForMove(move);
+            analyserPosition();
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        function buildBoard() {
+            const currentFen = game.fen();
+            board = Chessboard('myBoard', {
+                draggable: (inputMode === 'drag'),
+                position: currentFen,
+                orientation: boardOrientation,
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd
+            });
+
+            $('#myBoard').off('click', '.square-55d63').on('click', '.square-55d63', function() {
+                const sq = $(this).attr('data-square');
+                if (sq) handleSquareClick(sq);
+            });
+
+            if (bestMoveCurrent) {
+                dessinerFleche(bestMoveCurrent.substring(0, 2), bestMoveCurrent.substring(2, 4));
+            }
+        }
+
+        // ==========================================
+        // FLÈCHES & BOUTONS DE CONTRÔLE
+        // ==========================================
+        function dessinerFleche(fromSq, toSq) {
+            const canvas = document.getElementById("arrowCanvas");
+            const boardEl = document.getElementById("myBoard");
+            canvas.width = boardEl.offsetWidth;
+            canvas.height = boardEl.offsetHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const sqSize = canvas.width / 8;
+            function getCoords(sq) {
+                let col = sq.charCodeAt(0) - 97;
+                let row = 8 - parseInt(sq[1], 10);
+                if (boardOrientation === 'black') {
+                    col = 7 - col;
+                    row = 7 - row;
+                }
+                return { x: col * sqSize + sqSize / 2, y: row * sqSize + sqSize / 2 };
+            }
+
+            const start = getCoords(fromSq);
+            const end = getCoords(toSq);
+            const headlen = sqSize * 0.35;
+            const angle = Math.atan2(end.y - start.y, end.x - start.x);
+
+            ctx.strokeStyle = "rgba(129, 182, 76, 0.88)";
+            ctx.fillStyle = "rgba(129, 182, 76, 0.88)";
+            ctx.lineWidth = sqSize * 0.16;
+            ctx.lineCap = "round";
+
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(end.x - headlen * 0.6 * Math.cos(angle), end.y - headlen * 0.6 * Math.sin(angle));
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(end.x, end.y);
+            ctx.lineTo(end.x - headlen * Math.cos(angle - Math.PI / 6), end.y - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(end.x - headlen * Math.cos(angle + Math.PI / 6), end.y - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function effacerFleches() {
+            const canvas = document.getElementById("arrowCanvas");
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function jouerMeilleurCoup() {
+            if (!bestMoveCurrent) return;
+            initAudio();
+            const move = game.move({
+                from: bestMoveCurrent.substring(0, 2),
+                to: bestMoveCurrent.substring(2, 4),
+                promotion: bestMoveCurrent.length === 5 ? bestMoveCurrent[4] : 'q'
+            });
+            selectedSquare = null;
+            clearHighlights();
+            board.position(game.fen());
+            triggerSoundForMove(move);
+            analyserPosition();
+        }
+
+        function annulerCoup() {
+            game.undo();
+            selectedSquare = null;
+            clearHighlights();
+            board.position(game.fen());
+            playChessSound('move');
+            analyserPosition();
+        }
+
+        function retournerPlateau() {
+            boardOrientation = boardOrientation === 'white' ? 'black' : 'white';
+            board.orientation(boardOrientation);
+            if (bestMoveCurrent) {
+                dessinerFleche(bestMoveCurrent.substring(0, 2), bestMoveCurrent.substring(2, 4));
+            }
+        }
+
+        function reinitialiser() {
+            game.reset();
+            selectedSquare = null;
+            clearHighlights();
+            board.start();
+            playChessSound('move');
+            analyserPosition();
+        }
+
+        // ==========================================
+        // OPTION CLÉ API IA (GROQ / OPENAI)
+        // ==========================================
+        function saveApiKey() {
+            const key = document.getElementById("apiKeyInput").value.trim();
+            const provider = document.getElementById("apiProvider").value;
+            localStorage.setItem("tgiame_chess_apikey", key);
+            localStorage.setItem("tgiame_chess_provider", provider);
+            alert("Clé API enregistrée !");
+            if (bestMoveCurrent) analyserPosition();
+        }
+
+        async function demanderExplicationIA(uciMove, nomPiece, evalStr) {
+            const apiKey = localStorage.getItem("tgiame_chess_apikey");
+            const provider = localStorage.getItem("tgiame_chess_provider") || "groq";
+            if (!apiKey) return;
+
+            const endpoint = provider === "groq"
+                ? "https://api.groq.com/openai/v1/chat/completions"
+                : "https://api.openai.com/v1/chat/completions";
+            const model = provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini";
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + apiKey
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{
+                            role: "user",
+                            content: `Tu es un coach d'échecs pédagogue. Position FEN : ${game.fen()}. Stockfish recommande ${nomPiece} ${uciMove} (évaluation ${evalStr}). Explique en 2 phrases courtes en français pourquoi ce coup est le meilleur.`
+                        }],
+                        max_tokens: 110
+                    })
+                });
+                const data = await res.json();
+                if (data.choices && data.choices[0]) {
+                    const el = document.getElementById("aiExplanation");
+                    if (el) el.innerText = "🤖 " + data.choices[0].message.content.trim();
+                }
+            } catch (e) {}
+        }
+
+        window.addEventListener('resize', () => {
+            if (board) board.resize();
+            if (bestMoveCurrent) {
+                dessinerFleche(bestMoveCurrent.substring(0, 2), bestMoveCurrent.substring(2, 4));
+            }
+        });
+
+        // Chargement initial
+        document.getElementById("apiKeyInput").value = localStorage.getItem("tgiame_chess_apikey") || "";
+        document.getElementById("apiProvider").value = localStorage.getItem("tgiame_chess_provider") || "groq";
+        buildBoard();
+        initStockfish();
+    </script>
+</body>
+</html>
