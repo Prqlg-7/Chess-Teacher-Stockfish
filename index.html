@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Teacher - Entraîneur d'Ouvertures</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #161512;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 15px;
+            min-height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 440px;
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-size: 20px;
+            color: #81b64c;
+            margin: 0;
+        }
+        .sound-btn {
+            background-color: #2c2a27;
+            color: #e0e0e0;
+            border: 1px solid #444;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .phase-banner {
+            width: 100%;
+            max-width: 440px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+        .phase-watch {
+            background-color: #1d3557;
+            border: 1px solid #457b9d;
+            color: #a8dadc;
+        }
+        .phase-play {
+            background-color: #2b3a1e;
+            border: 1px solid #81b64c;
+            color: #d8f3dc;
+        }
+        .phase-win {
+            background-color: #3d2c08;
+            border: 1px solid #e5a93b;
+            color: #ffe8a3;
+        }
+        .board-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            aspect-ratio: 1 / 1;
+            touch-action: pan-y; /* Permet de faire défiler la page même en touchant l'échiquier */
+        }
+        #myBoard {
+            width: 100%;
+            touch-action: pan-y;
+        }
+        #arrowCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .selected-sq {
+            box-shadow: inset 0 0 0 4px rgba(255, 215, 0, 0.85) !important;
+        }
+        .hint-sq {
+            box-shadow: inset 0 0 0 4px rgba(0, 180, 216, 0.9) !important;
+        }
+        .coach-box {
+            background-color: #262421;
+            border-left: 5px solid #81b64c;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 14px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        .opening-title {
+            font-size: 15px;
+            color: #e5a93b;
+            font-weight: bold;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .progress-badge {
+            background-color: #363431;
+            color: #ffffff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .coach-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #eaeaea;
+            min-height: 44px;
+        }
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 440px;
+        }
+        button.action-btn {
+            background-color: #363431;
+            color: white;
+            border: none;
+            padding: 12px 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            flex: 1;
+            min-width: 110px;
+            transition: background 0.2s;
+        }
+        button.action-btn:hover:not(:disabled) {
+            background-color: #4a4743;
+        }
+        button.action-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        button.btn-hint {
+            background-color: #0077b6;
+            color: #ffffff;
+        }
+        button.btn-hint:hover:not(:disabled) {
+            background-color: #0096c7;
+        }
+        button.btn-next {
+            background-color: #81b64c;
+            color: #161512;
+        }
+        button.btn-next:hover:not(:disabled) {
+            background-color: #95cc5c;
+        }
+        .move-history {
+            margin-top: 12px;
+            width: 100%;
+            max-width: 440px;
+            background-color: #1e1c19;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #a8a8a8;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>♟️ Chess Teacher</h1>
+        <button class="sound-btn" id="soundToggle" onclick="toggleSound()">🔊 Son : ON</button>
+    </div>
+
+    <div class="phase-banner phase-watch" id="phaseBanner">
+        👀 Phase 1 : Observe et mémorise la séquence...
+    </div>
+
+    <div class="board-wrapper" id="boardWrapper">
+        <div id="myBoard"></div>
+        <canvas id="arrowCanvas"></canvas>
+    </div>
+
+    <div class="coach-box">
+        <div class="opening-title">
+            <span id="openingName">Chargement...</span>
+            <span class="progress-badge" id="stepCounter">Coup 0 / 0</span>
+        </div>
+        <div class="coach-text" id="coachText">
+            Préparation de l'échiquier...
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="action-btn btn-hint" id="btnHint" onclick="donnerIndice()" disabled>💡 Indice</button>
+        <button class="action-btn" id="btnReplay" onclick="revoirSequence()">🔄 Revoir</button>
+        <button class="action-btn btn-next" id="btnNew" onclick="lancerVarianteAleatoire()">🎲 Autre variante</button>
+    </div>
+
+    <div class="move-history" id="moveHistory">
+        Coups : —
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        // ============================================================
+        // TES 3 VARIANTES OFFICIELLES CODÉES EN DUR
+        // ============================================================
+        const VARIANTES = [
+            {
+                nom: "Variante 1 : Partie Espagnole (Ruy Lopez)",
+                coups: [
+                    { san: "e4",   side: "w", desc: "1. e4 — Prend immédiatement le contrôle du centre et ouvre des lignes pour la Dame et le Fou." },
+                    { san: "e5",   side: "b", desc: "1... e5 — Les Noirs répondent symétriquement pour bloquer l'avance au centre." },
+                    { san: "Nf3",  side: "w", desc: "2. Cf3 — Développe le Cavalier vers le centre et attaque directement le pion noir en e5." },
+                    { san: "Nc6",  side: "b", desc: "2... Cc6 — Les Noirs développent leur Cavalier pour défendre leur pion e5." },
+                    { san: "Bb5",  side: "w", desc: "3. Fb5 — La Partie Espagnole : met la pression sur le Cavalier qui protège le pion e5 et prépare le roque." },
+                    { san: "a6",   side: "b", desc: "3... a6 — Les Noirs interrogent immédiatement ton Fou." },
+                    { san: "Ba4",  side: "w", desc: "4. Fa4 — Recule le Fou tout en maintenant la pression sur la diagonale a4-e8." },
+                    { san: "Nf6",  side: "b", desc: "4... Cf6 — Les Noirs développent leur Cavalier et attaquent ton pion e4." },
+                    { san: "O-O",  side: "w", desc: "5. O-O — Met le Roi en sécurité grâce au petit roque et active la Tour en f1." },
+                    { san: "Be7",  side: "b", desc: "5... Fe7 — Les Noirs préparent leur propre roque." },
+                    { san: "Re1",  side: "w", desc: "6. Te1 — Protège solidement le pion e4 et menace maintenant de gagner le pion e5." },
+                    { san: "b5",   side: "b", desc: "6... b5 — Les Noirs chassent le Fou pour protéger leur pion e5." },
+                    { san: "Bb3",  side: "w", desc: "7. Fb3 — Replace le Fou sur la grande diagonale a2-g8 qui vise directement le roque adverse." }
+                ]
+            },
+            {
+                nom: "Variante 2 : Défense Sicilienne (Attaque Anglaise)",
+                coups: [
+                    { san: "e4",   side: "w", desc: "1. e4 — Prend immédiatement le contrôle du centre et libère la Dame et le Fou." },
+                    { san: "c5",   side: "b", desc: "1... c5 — Défense Sicilienne : les Noirs luttent de façon asymétrique pour la case d4." },
+                    { san: "Nf3",  side: "w", desc: "2. Cf3 — Développe le Cavalier vers le centre et prépare la poussée d4." },
+                    { san: "d6",   side: "b", desc: "2... d6 — Les Noirs contrôlent la case e5 et préparent leur développement." },
+                    { san: "d4",   side: "w", desc: "3. d4 — Ouvre immédiatement le centre et force l'échange contre un pion central." },
+                    { san: "cxd4", side: "b", desc: "3... cxd4 — Les Noirs échangent leur pion latéral contre ton pion central d4." },
+                    { san: "Nxd4", side: "w", desc: "4. Cxd4 — Reprend le pion et installe un Cavalier très actif et centralisé en d4." },
+                    { san: "Nf6",  side: "b", desc: "4... Cf6 — Les Noirs développent leur Cavalier et attaquent ton pion e4." },
+                    { san: "Nc3",  side: "w", desc: "5. Cc3 — Développe le deuxième Cavalier vers le centre tout en protégeant solidement le pion e4." },
+                    { san: "a6",   side: "b", desc: "5... a6 — Variante Najdorf : empêche tes pièces d'utiliser la case b5." },
+                    { san: "Be3",  side: "w", desc: "6. Fe3 — Développe le Fou sur une excellente diagonale, soutient le Cavalier d4 et prépare le grand roque." }
+                ]
+            },
+            {
+                nom: "Variante 3 : Défense Française (Variante d'Avance)",
+                coups: [
+                    { san: "e4",   side: "w", desc: "1. e4 — Prend immédiatement le contrôle du centre et ouvre des lignes pour la Dame et le Fou." },
+                    { san: "e6",   side: "b", desc: "1... e6 — Défense Française : les Noirs préparent la contre-attaque au centre en d5." },
+                    { san: "d4",   side: "w", desc: "2. d4 — Installe un duo de pions idéal au centre (e4 et d4) et contrôle un maximum d'espace." },
+                    { san: "d5",   side: "b", desc: "2... d5 — Les Noirs attaquent aussitôt ton pion e4 au centre." },
+                    { san: "e5",   side: "w", desc: "3. e5 — Variante d'Avance : gagne de l'espace au centre et enferme le Fou de cases blanches adverse." },
+                    { san: "c5",   side: "b", desc: "3... c5 — Les Noirs attaquent la base de ta chaîne de pions en d4." },
+                    { san: "c3",   side: "w", desc: "4. c3 — Renforce solidement le pion d4 pour maintenir la chaîne de pions intacte." },
+                    { san: "Nc6",  side: "b", desc: "4... Cc6 — Les Noirs ajoutent de la pression sur le pion d4." },
+                    { san: "Nf3",  side: "w", desc: "5. Cf3 — Développe le Cavalier vers le centre et ajoute un second défenseur sur le pion d4 attaqué." },
+                    { san: "Qb6",  side: "b", desc: "5... Db6 — Les Noirs attaquent encore d4 avec leur Dame." },
+                    { san: "Be2",  side: "w", desc: "6. Fe2 — Développe le Fou tranquillement, prépare le petit roque et protège le Cavalier f3." }
+                ]
+            }
+        ];
+
+        // ============================================================
+        // SYNTHÉTISEUR DE BRUITAGES (WEB AUDIO API - 100% HORS LIGNE)
+        // ============================================================
+        let soundEnabled = true;
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById("soundToggle").innerText = soundEnabled ? "🔊 Son : ON" : "🔇 Son : OFF";
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            initAudio();
+            const now = audioCtx.currentTime;
+
+            if (type === "move") {
+                // Bruit sec de pièce posée sur le bois
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "triangle";
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(55, now + 0.08);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            } else if (type === "capture") {
+                // Double claquement pour une prise
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "sawtooth";
+                osc.frequency.setValueAtTime(240, now);
+                osc.frequency.exponentialRampToValueAtTime(70, now + 0.12);
+                gain.gain.setValueAtTime(0.45, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.13);
+            } else if (type === "error") {
+                // Buzzer doux si mauvais coup
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "sawtooth";
+                osc.frequency.setValueAtTime(130, now);
+                osc.frequency.linearRampToValueAtTime(95, now + 0.22);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.23);
+            } else if (type === "hint") {
+                // Petit tintement d'indice
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(587.33, now); // Ré5
+                osc.frequency.setValueAtTime(880, now + 0.09); // La5
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.26);
+            } else if (type === "win") {
+                // Accord de victoire
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = "triangle";
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                    gain.gain.setValueAtTime(0.25, now + idx * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.35);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.08);
+                    osc.stop(now + idx * 0.08 + 0.36);
+                });
+            }
+        }
+
+        // ============================================================
+        // LOGIQUE D'APPRENTISSAGE ET DE MÉMORISATION
+        // ============================================================
+        let board = null;
+        let game = new Chess();
+        let currentVariante = null;
+        let lastIndex = -1;
+        let mode = "WATCH"; // "WATCH" (Démonstration) | "PLAY" (Test joueur) | "DONE" (Terminé)
+        let currentStep = 0;
+        let demoTimer = null;
+        let selectedSquare = null;
+
+        function lancerVarianteAleatoire() {
+            clearTimeout(demoTimer);
+            // Choisit une variante différente de la précédente
+            let idx;
+            do {
+                idx = Math.floor(Math.random() * VARIANTES.length);
+            } while (idx === lastIndex && VARIANTES.length > 1);
+            lastIndex = idx;
+            currentVariante = VARIANTES[idx];
+
+            demarrerDemonstration();
+        }
+
+        function revoirSequence() {
+            clearTimeout(demoTimer);
+            if (currentVariante) {
+                demarrerDemonstration();
+            }
+        }
+
+        function demarrerDemonstration() {
+            mode = "WATCH";
+            currentStep = 0;
+            selectedSquare = null;
+            clearHighlights();
+            effacerFleches();
+            game.reset();
+            board.start();
+
+            document.getElementById("btnHint").disabled = true;
+            document.getElementById("openingName").innerText = currentVariante.nom;
+            updateBanner("phase-watch", "👀 Phase 1 : Observe et mémorise la séquence...");
+            updateProgress();
+            document.getElementById("coachText").innerHTML = "Regarde bien chaque coup et son explication. À la fin, ce sera à toi de la rejouer !";
+            updateHistoryDisplay();
+
+            demoTimer = setTimeout(jouerProchainCoupDemo, 1100);
+        }
+
+        function jouerProchainCoupDemo() {
+            if (mode !== "WATCH") return;
+
+            if (currentStep >= currentVariante.coups.length) {
+                // Fin de la démonstration -> Passage au test !
+                demoTimer = setTimeout(demarrerPhaseJoueur, 1800);
+                return;
+            }
+
+            const stepData = currentVariante.coups[currentStep];
+            const moveObj = game.move(stepData.san);
+            board.position(game.fen());
+
+            if (moveObj) {
+                playSound(moveObj.captured ? "capture" : "move");
+                if (stepData.side === "w") {
+                    dessinerFleche(moveObj.from, moveObj.to, "rgba(129, 182, 76, 0.85)");
+                } else {
+                    effacerFleches();
+                }
+            }
+
+            document.getElementById("coachText").innerHTML = stepData.desc;
+            currentStep++;
+            updateProgress();
+            updateHistoryDisplay();
+
+            // Délai adapté pour avoir le temps de lire l'explication des coups blancs
+            const delay = stepData.side === "w" ? 2400 : 1300;
+            demoTimer = setTimeout(jouerProchainCoupDemo, delay);
+        }
+
+        function demarrerPhaseJoueur() {
+            mode = "PLAY";
+            currentStep = 0;
+            selectedSquare = null;
+            clearHighlights();
+            effacerFleches();
+            game.reset();
+            board.start();
+
+            document.getElementById("btnHint").disabled = false;
+            updateBanner("phase-play", "🎯 Phase 2 : À toi de jouer ! Reproduis les coups des Blancs");
+            updateProgress();
+            document.getElementById("coachText").innerHTML = "Touche une pièce blanche puis sa case d'arrivée pour jouer le 1er coup. Besoin d'aide ? Appuie sur <strong>💡 Indice</strong>.";
+            updateHistoryDisplay();
+        }
+
+        function verifierCoupJoueur(from, to) {
+            if (mode !== "PLAY") return;
+
+            const expectedStep = currentVariante.coups[currentStep];
+            if (!expectedStep || expectedStep.side !== "w") return;
+
+            // Teste si le coup est légal aux échecs
+            const testGame = new Chess(game.fen());
+            const attemptedMove = testGame.move({ from: from, to: to, promotion: 'q' });
+
+            if (!attemptedMove) {
+                // Coup illégal
+                return;
+            }
+
+            if (attemptedMove.san === expectedStep.san) {
+                // BON COUP !
+                game.move({ from: from, to: to, promotion: 'q' });
+                board.position(game.fen());
+                playSound(attemptedMove.captured ? "capture" : "move");
+                effacerFleches();
+                clearHighlights();
+
+                document.getElementById("coachText").innerHTML = "✅ <strong>Excellent !</strong> " + expectedStep.desc;
+                currentStep++;
+                updateProgress();
+                updateHistoryDisplay();
+
+                // Vérifie si la variante est terminée
+                if (currentStep >= currentVariante.coups.length) {
+                    terminerVariante();
+                    return;
+                }
+
+                // Sinon, l'adversaire (Noirs) joue automatiquement sa réponse après 600ms
+                setTimeout(jouerReponseAdversaire, 650);
+            } else {
+                // MAUVAIS COUP (pas celui de la variante)
+                playSound("error");
+                clearHighlights();
+                document.getElementById("coachText").innerHTML =
+                    "❌ <strong>Ce n'est pas le coup de cette variante !</strong> Essaie encore ou appuie sur <strong>💡 Indice</strong>.";
+            }
+        }
+
+        function jouerReponseAdversaire() {
+            if (mode !== "PLAY") return;
+            const blackStep = currentVariante.coups[currentStep];
+            if (!blackStep || blackStep.side !== "b") return;
+
+            const moveObj = game.move(blackStep.san);
+            board.position(game.fen());
+            if (moveObj) {
+                playSound(moveObj.captured ? "capture" : "move");
+            }
+
+            document.getElementById("coachText").innerHTML =
+                `L'adversaire répond : <strong>${blackStep.desc}</strong><br><span style="color:#81b64c;">À toi de jouer la suite !</span>`;
+            currentStep++;
+            updateProgress();
+            updateHistoryDisplay();
+
+            if (currentStep >= currentVariante.coups.length) {
+                terminerVariante();
+            }
+        }
+
+        function terminerVariante() {
+            mode = "DONE";
+            document.getElementById("btnHint").disabled = true;
+            playSound("win");
+            updateBanner("phase-win", "🏆 Bravo ! Variante maîtrisée à 100 % !");
+            document.getElementById("coachText").innerHTML =
+                `Tu as réussi toute la séquence de la <strong>${currentVariante.nom}</strong> sans erreur ! Clique sur <strong>🎲 Autre variante</strong> pour continuer ton entraînement.`;
+        }
+
+        function donnerIndice() {
+            if (mode !== "PLAY") return;
+            const expectedStep = currentVariante.coups[currentStep];
+            if (!expectedStep || expectedStep.side !== "w") return;
+
+            // Trouve les cases départ/arrivée du coup attendu
+            const tempGame = new Chess(game.fen());
+            const moveObj = tempGame.move(expectedStep.san);
+            if (moveObj) {
+                playSound("hint");
+                clearHighlights();
+                highlightSquare(moveObj.from, "hint-sq");
+                dessinerFleche(moveObj.from, moveObj.to, "rgba(0, 180, 216, 0.9)");
+
+                const nomsPieces = { p: "Pion", n: "Cavalier", b: "Fou", r: "Tour", q: "Dame", k: "Roi" };
+                document.getElementById("coachText").innerHTML =
+                    `💡 <strong>Indice :</strong> Déplace ton <strong>${nomsPieces[moveObj.piece]}</strong> de <strong>${moveObj.from}</strong> vers <strong>${moveObj.to}</strong>.<br><span style="font-size:13px; color:#bababa;">(${expectedStep.desc})</span>`;
+            }
+        }
+
+        // ============================================================
+        // GESTION DU TOUCHER SUR MOBILE (SANS BLOQUER LE SCROLL)
+        // ============================================================
+        function handleSquareClick(square) {
+            if (mode !== "PLAY") return;
+            const currentTurnStep = currentVariante.coups[currentStep];
+            if (!currentTurnStep || currentTurnStep.side !== "w") return;
+
+            const pieceOnSquare = game.get(square);
+
+            // Si aucune pièce n'est sélectionnée, on sélectionne une pièce blanche
+            if (!selectedSquare) {
+                if (pieceOnSquare && pieceOnSquare.color === 'w') {
+                    selectedSquare = square;
+                    clearHighlights();
+                    highlightSquare(square, "selected-sq");
+                }
+                return;
+            }
+
+            // Si on reclique sur la même case, on désélectionne
+            if (selectedSquare === square) {
+                selectedSquare = null;
+                clearHighlights();
+                return;
+            }
+
+            // Si on clique sur une autre pièce blanche, on change la sélection
+            if (pieceOnSquare && pieceOnSquare.color === 'w') {
+                selectedSquare = square;
+                clearHighlights();
+                highlightSquare(square, "selected-sq");
+                return;
+            }
+
+            // Sinon, on tente de jouer le coup de selectedSquare vers square
+            const fromSq = selectedSquare;
+            selectedSquare = null;
+            clearHighlights();
+            verifierCoupJoueur(fromSq, square);
+        }
+
+        function highlightSquare(sq, className) {
+            const el = document.querySelector(`#myBoard .square-${sq}`);
+            if (el) el.classList.add(className);
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll("#myBoard .square-55d63").forEach(el => {
+                el.classList.remove("selected-sq", "hint-sq");
+            });
+        }
+
+        function updateBanner(cssClass, text) {
+            const banner = document.getElementById("phaseBanner");
+            banner.className = "phase-banner " + cssClass;
+            banner.innerText = text;
+        }
+
+        function updateProgress() {
+            const total = currentVariante ? currentVariante.coups.length : 0;
+            document.getElementById("stepCounter").innerText = `Coup ${currentStep} / ${total}`;
+        }
+
+        function updateHistoryDisplay() {
+            const hist = game.history();
+            if (hist.length === 0) {
+                document.getElementById("moveHistory").innerText = "Coups : —";
+                return;
+            }
+            let formatted = "";
+            for (let i = 0; i < hist.length; i += 2) {
+                const num = Math.floor(i / 2) + 1;
+                formatted += `${num}. ${hist[i]} ${hist[i+1] ? hist[i+1] + "  " : ""}`;
+            }
+            document.getElementById("moveHistory").innerText = "Coups : " + formatted.trim();
+        }
+
+        function dessinerFleche(fromSq, toSq, color) {
+            const canvas = document.getElementById("arrowCanvas");
+            const boardEl = document.getElementById("myBoard");
+            canvas.width = boardEl.offsetWidth;
+            canvas.height = boardEl.offsetHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const sqSize = canvas.width / 8;
+            function getCoords(sq) {
+                const col = sq.charCodeAt(0) - 97;
+                const row = 8 - parseInt(sq[1]);
+                return {
+                    x: col * sqSize + sqSize / 2,
+                    y: row * sqSize + sqSize / 2
+                };
+            }
+
+            const start = getCoords(fromSq);
+            const end = getCoords(toSq);
+            const headlen = sqSize * 0.35;
+            const angle = Math.atan2(end.y - start.y, end.x - start.x);
+
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = sqSize * 0.16;
+            ctx.lineCap = "round";
+
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(end.x - headlen * 0.6 * Math.cos(angle), end.y - headlen * 0.6 * Math.sin(angle));
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(end.x, end.y);
+            ctx.lineTo(end.x - headlen * Math.cos(angle - Math.PI / 6), end.y - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(end.x - headlen * Math.cos(angle + Math.PI / 6), end.y - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function effacerFleches() {
+            const canvas = document.getElementById("arrowCanvas");
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Initialisation de l'échiquier en mode tactile (draggable: false pour que le scroll mobile soit 100% libre)
+        board = Chessboard('myBoard', {
+            draggable: false,
+            position: 'start',
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        });
+
+        // Écoute des clics / touches sur chaque case de l'échiquier
+        document.getElementById("myBoard").addEventListener("click", function(e) {
+            const sqEl = e.target.closest(".square-55d63");
+            if (sqEl) {
+                const sqName = sqEl.getAttribute("data-square");
+                if (sqName) handleSquareClick(sqName);
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            board.resize();
+        });
+
+        // Lancement automatique au démarrage
+        lancerVarianteAleatoire();
+    </script>
+</body>
+</html>
